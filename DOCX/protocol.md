@@ -111,7 +111,7 @@ Message **SYSTEM** được tạo bởi server để gửi các thông báo hệ
 - `content`: nội dung thông báo  
 - `timestamp`: thời gian thông báo  
 
----
+
 
 ## 2. JSON Format
 
