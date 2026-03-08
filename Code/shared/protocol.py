@@ -48,13 +48,15 @@ def login_success(username):
     return {
         "type": LOGIN_SUCCESS,
         "username": username,
+        "message": "Login successful",
         "timestamp": get_time()
     }
 
 
-def login_fail(reason):
+def login_fail(username,reason):
     return {
         "type": LOGIN_FAIL,
+        "username": username,
         "reason": reason,
         "timestamp": get_time()
     }
