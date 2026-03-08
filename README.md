@@ -2,6 +2,10 @@
 
 Dự án xây dựng một hệ thống Chat Client-Server sử dụng giao thức TCP, hỗ trợ đa luồng và giao diện người dùng hiện đại với thư viện CustomTkinter.
 
+## Sơ đồ kiến trúc hệ thống
+
+![Sơ đồ Client Server](DOCX/Client-Server%20tổng%20thể.png)
+
 ## Thành phần dự án
 - **client/**: Chứa mã nguồn giao diện (GUI) và logic kết nối phía người dùng.
 - **server/**: Bộ trung tâm xử lý kết nối, điều phối tin nhắn (Message Broker) và quản lý người dùng online.
