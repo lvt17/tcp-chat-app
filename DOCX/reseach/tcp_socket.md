@@ -1,6 +1,6 @@
 # TCP Socket research:
 
-## blind() 
+## bind() 
 ***Gán socket với port***
  `server_socket.bind(IP, PORT)`
 
