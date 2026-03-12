@@ -1,8 +1,8 @@
-# TCP socket research:
+# TCP Socket research:
 
 ## blind() 
 ***Gán socket với port***
-syntax: `server_socket.bind(IP, PORT)`
+ `server_socket.bind(IP, PORT)`
 
 ## listen()
  ***Chỉ dùng cho TCP server. Sau khi bind xong → server mở cổng chờ kết nối.***
