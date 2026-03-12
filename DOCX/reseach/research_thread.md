@@ -5,7 +5,7 @@ dưới đây là cách thực hiện.
 
 Ví dụ: ta có 1 hàm `def handle_client():`, hàm này sẽ được sử dụng để nhận dữ liệu từ client, từ đó decode và in ra thông tin mà user muốn gửi.
 
-Khi `server_socket.listen()` và đã kết nối thành công nhận được object socket của client cũng như nhận thông tin như ip và port của client 
+Khi `server_socket.listen()` và đã kết nối thành công nhận được object socket của client cũng như nhận thông tin như ip và port của client sau đó ta có thể tạo 1 luồng thread riêng cho từng server như đoạn code dưới đây.
 
 
 
