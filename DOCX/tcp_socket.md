@@ -1,4 +1,4 @@
-# Các module trong TCP:
+# TCP socket research:
 
 ## blind() 
 ***Gán socket với port***
