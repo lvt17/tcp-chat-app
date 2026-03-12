@@ -24,5 +24,5 @@ ví dụ `data = server_socket.recv(bufsize)` (bufsize là số bytes tối đa 
 
 sau khi nhận thì có thể decode để in ra dữ liệu.
 
-ví dụ `print(data.decode("utf-8")`
+ví dụ `print(data.decode("utf-8"))`
 
