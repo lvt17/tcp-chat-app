@@ -1,7 +1,7 @@
 import socket
 import threading
 
-SERVER_IP='127.0.0.1'
+SERVER_IP=''
 PORT=8000
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -25,5 +25,6 @@ while True:
     if msg.lower() == "q":
         break
     client.send(msg.encode("utf-8"))
-    
+
+client.shutdown(socket.SHUT_RDWR)
 client.close()

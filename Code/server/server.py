@@ -8,7 +8,7 @@ import json
 """
 
 #define
-SERVER_IP='0.0.0.0'
+SERVER_IP=''
 PORT=8000
 
 #setup server
