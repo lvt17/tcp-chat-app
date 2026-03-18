@@ -6,7 +6,7 @@ import json
 """
 !!! watching the explanation in DOCX/research/server_explain.md !!!
 """
-
+  
 #define
 SERVER_IP=''
 PORT=8000

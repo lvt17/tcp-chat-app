@@ -1,7 +1,7 @@
 import socket
 import threading
 
-SERVER_IP=''
+SERVER_IP=''  
 PORT=8000
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
