@@ -1,46 +1,53 @@
 import socket
 import threading
-import json
-#from shared.protocol import *
+import sys
+import os
 
-"""
-!!! watching the explanation in DOCX/research/server_explain.md !!!
-"""
-  
-#define
-SERVER_IP=''
-PORT=8000
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from shared import protocol
 
-#setup server
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind((SERVER_IP, PORT))
-server.listen()
-print(f"[LISTENING] {SERVER_IP}:{PORT}") #show server IP and port
+HOST = '0.0.0.0'
+PORT = 8000
 
-def handleClient(client_socket, addr):
-    print(f"[CONNECTED] {addr}")
+# {addr: {"socket": conn, "username": str}}
+clients = {}
+clients_lock = threading.Lock()
+
+
+def start_server():
+    """Khởi tạo server TCP và bắt đầu lắng nghe kết nối."""
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind((HOST, PORT))
+    server.listen()
+    print(f"[SERVER] Listening on {HOST}:{PORT}")
+
+    while True:
+        conn, addr = server.accept()
+        print(f"[CONNECT] {addr} connected")
+        thread = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
+        thread.start()
+
+
+def handle_client(conn, addr):
+    """Xử lý kết nối từ một client."""
     try:
         while True:
-            data = client_socket.recv(1024)
-            if not data: #client out
-                print(f"[DISCONNECT] {addr}")
+            data = conn.recv(1024)
+            if not data:
                 break
 
-            msg = data.decode("utf-8") #client message send
+            msg = data.decode("utf-8")
             print(f"[{addr}] {msg}")
 
-            reply = f"Server received: {msg}" #server message reply
-            client_socket.send(reply.encode("utf-8"))
+            reply = f"Server received: {msg}"
+            conn.send(reply.encode("utf-8"))
     except Exception as e:
         print(f"[ERROR] {addr}: {e}")
     finally:
-        client_socket.close()
+        conn.close()
+        print(f"[DISCONNECT] {addr}")
 
-#client processing
-while True:
-    client_socket, addr = server.accept()
-    print(f"[NEW CONNECT] {addr}")
-    
-    #create new thread for this client
-    thread = threading.Thread(target=handleClient, args=(client_socket, addr))
-    thread.start()
+
+if __name__ == "__main__":
+    start_server()
