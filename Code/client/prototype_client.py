@@ -5,7 +5,9 @@ import datetime
 
 SERVER_IP=''
 PORT=8000
-
+"""
+!!! watching the explanation in DOCX/research/prototype_explain !!!
+"""
 client = None
 username = None
 
