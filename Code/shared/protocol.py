@@ -1,4 +1,5 @@
 import json
+import struct
 from datetime import datetime
 
 
@@ -131,3 +132,43 @@ def error_msg(text):
         "message": text,
         "timestamp": get_time()
     }
+
+
+# send message to socket
+def send_message(sock, msg_dict):
+    try:
+        data = encode_message(msg_dict).encode("utf-8")
+        length = struct.pack("!I", len(data))
+        sock.sendall(length + data)
+    except Exception as e:
+        print("Send error:", e)
+
+
+# receive message from socket
+def recv_message(sock):
+    try:
+        raw_length = recvall(sock, 4)
+        if not raw_length:
+            return None
+
+        length = struct.unpack("!I", raw_length)[0]
+        data = recvall(sock, length)
+        if not data:
+            return None
+
+        return decode_message(data.decode("utf-8"))
+
+    except Exception as e:
+        print("Receive error:", e)
+        return None
+
+
+# helper: read n bytes
+def recvall(sock, n):
+    data = b''
+    while len(data) < n:
+        packet = sock.recv(n - len(data))
+        if not packet:
+            return None
+        data += packet
+    return data
