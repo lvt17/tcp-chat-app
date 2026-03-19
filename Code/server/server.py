@@ -14,6 +14,17 @@ clients = {}
 clients_lock = threading.Lock()
 
 
+def broadcast(msg, exclude_addr=None):
+    """Gửi message tới tất cả client, trừ exclude_addr."""
+    with clients_lock:
+        for addr, client in clients.items():
+            if addr != exclude_addr:
+                try:
+                    protocol.send_message(client["socket"], msg)
+                except Exception as e:
+                    print(f"[ERROR] Broadcast to {addr}: {e}")
+
+
 def start_server():
     """Khởi tạo server TCP và bắt đầu lắng nghe kết nối."""
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -51,8 +62,7 @@ def handle_client(conn, addr):
                 print(f"[LOGIN] {username} logged in")
 
             elif msg_type == protocol.CHAT:
-                print(f"[CHAT] {msg.get('sender')}: {msg.get('content')}")
-                # TODO: broadcast cho tất cả client
+                broadcast(msg, exclude_addr=addr)
 
             elif msg_type == protocol.PRIVATE:
                 print(f"[PRIVATE] {msg.get('sender')} -> {msg.get('receiver')}: {msg.get('content')}")
