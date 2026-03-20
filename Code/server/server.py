@@ -1,5 +1,6 @@
 import socket
 import threading
+import signal
 import sys
 import os
 
@@ -13,11 +14,13 @@ PORT = 8000
 clients = {}
 clients_lock = threading.Lock()
 
+server_socket = None
+
 
 def broadcast(msg, exclude_addr=None):
     """Gửi message tới tất cả client, trừ exclude_addr."""
     with clients_lock:
-        for addr, client in clients.items():
+        for addr, client in list(clients.items()):
             if addr != exclude_addr:
                 try:
                     protocol.send_message(client["socket"], msg)
@@ -37,7 +40,6 @@ def send_private(msg, receiver_username, sender_conn):
                     print(f"[ERROR] Private to {receiver_username}: {e}")
                     return False
 
-    # User không tìm thấy
     protocol.send_message(sender_conn, protocol.error_msg(f"User '{receiver_username}' không online"))
     return False
 
@@ -54,19 +56,22 @@ def get_online_usernames():
         return [c["username"] for c in clients.values()]
 
 
-def start_server():
-    """Khởi tạo server TCP và bắt đầu lắng nghe kết nối."""
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind((HOST, PORT))
-    server.listen()
-    print(f"[SERVER] Listening on {HOST}:{PORT}")
+def remove_client(addr, username):
+    """Xóa client khỏi danh sách và thông báo cho các client khác."""
+    with clients_lock:
+        client = clients.pop(addr, None)
+        if client:
+            try:
+                client["socket"].close()
+            except OSError:
+                pass
 
-    while True:
-        conn, addr = server.accept()
-        print(f"[CONNECT] {addr} connected")
-        thread = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
-        thread.start()
+    if username:
+        broadcast(protocol.system_msg(f"{username} đã rời đi"))
+        broadcast(protocol.user_list(get_online_usernames()))
+        print(f"[DISCONNECT] {username} ({addr})")
+    else:
+        print(f"[DISCONNECT] {addr}")
 
 
 def handle_client(conn, addr):
@@ -85,6 +90,11 @@ def handle_client(conn, addr):
             if msg_type == protocol.LOGIN:
                 username = msg.get("username")
 
+                if not username or not username.strip():
+                    protocol.send_message(conn, protocol.login_fail("", "Username không được để trống"))
+                    username = None
+                    continue
+
                 if is_username_taken(username):
                     protocol.send_message(conn, protocol.login_fail(username, "Username đã được sử dụng"))
                     username = None
@@ -97,9 +107,7 @@ def handle_client(conn, addr):
                 print(f"[LOGIN] {username} logged in")
 
             elif msg_type == protocol.JOIN:
-                # Thông báo cho tất cả user khác
                 broadcast(protocol.system_msg(f"{username} đã tham gia"), exclude_addr=addr)
-                # Gửi danh sách user online cho client mới
                 protocol.send_message(conn, protocol.user_list(get_online_usernames()))
 
             elif msg_type == protocol.CHAT:
@@ -116,16 +124,46 @@ def handle_client(conn, addr):
     except Exception as e:
         print(f"[ERROR] {addr}: {e}")
     finally:
-        with clients_lock:
-            clients.pop(addr, None)
-        conn.close()
+        remove_client(addr, username)
 
-        if username:
-            broadcast(protocol.system_msg(f"{username} đã rời đi"))
-            broadcast(protocol.user_list(get_online_usernames()))
-            print(f"[DISCONNECT] {username} ({addr})")
-        else:
-            print(f"[DISCONNECT] {addr}")
+
+def shutdown_server(sig, frame):
+    """Graceful shutdown: đóng tất cả kết nối khi nhấn Ctrl+C."""
+    print("\n[SERVER] Shutting down...")
+    broadcast(protocol.system_msg("Server đang tắt..."))
+
+    with clients_lock:
+        for addr, client in list(clients.items()):
+            try:
+                client["socket"].close()
+            except OSError:
+                pass
+        clients.clear()
+
+    if server_socket:
+        server_socket.close()
+    sys.exit(0)
+
+
+def start_server():
+    """Khởi tạo server TCP và bắt đầu lắng nghe kết nối."""
+    global server_socket
+    signal.signal(signal.SIGINT, shutdown_server)
+
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_socket.bind((HOST, PORT))
+    server_socket.listen()
+    print(f"[SERVER] Listening on {HOST}:{PORT}")
+
+    while True:
+        try:
+            conn, addr = server_socket.accept()
+            print(f"[CONNECT] {addr} connected")
+            thread = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
+            thread.start()
+        except OSError:
+            break
 
 
 if __name__ == "__main__":
