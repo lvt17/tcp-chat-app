@@ -3,7 +3,7 @@ import threading
 import json
 import datetime
 import struct
-SERVER_IP='192.168.1.4'
+SERVER_IP='0.0.0.0'
 PORT=8000
 """
 !!! watching the explanation in DOCX/research/prototype_explain !!!
