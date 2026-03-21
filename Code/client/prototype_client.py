@@ -33,7 +33,7 @@ def chat(username, content):
         "timestamp": datetime.datetime.now().isoformat()
     }
     return msg
-
+ 
 def private(sender, receiver, content):
     msg = {
         "type": "PRIVATE",
