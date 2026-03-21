@@ -2,14 +2,12 @@ import socket
 import threading
 import json
 import datetime
-
-SERVER_IP=''
+import struct
+SERVER_IP='192.168.1.4'
 PORT=8000
 """
 !!! watching the explanation in DOCX/research/prototype_explain !!!
 """
-client = None
-username = None
 
 def login(username):
     msg = {
@@ -17,7 +15,7 @@ def login(username):
         "username": username,
         "timestamp": datetime.datetime.now().isoformat()
     }
-    client.send(json.dumps(msg).encode("utf-8"))
+    return msg
 
 def join(username):
     msg = {
@@ -25,7 +23,7 @@ def join(username):
         "username": username,
         "timestamp": datetime.datetime.now().isoformat()
     }
-    client.send(json.dumps(msg).encode("utf-8"))
+    return msg
 
 def chat(username, content):
     msg = {
@@ -34,7 +32,7 @@ def chat(username, content):
         "content": content,
         "timestamp": datetime.datetime.now().isoformat()
     }
-    client.send(json.dumps(msg).encode("utf-8"))
+    return msg
 
 def private(sender, receiver, content):
     msg = {
@@ -44,7 +42,7 @@ def private(sender, receiver, content):
         "content": content,
         "timestamp": datetime.datetime.now().isoformat()
     }
-    client.send(json.dumps(msg).encode("utf-8"))
+    return msg
 
 def leave(username):
     msg = {
@@ -52,69 +50,117 @@ def leave(username):
         "username": username,
         "timestamp": datetime.datetime.now().isoformat()
     }
-    client.send(json.dumps(msg).encode("utf-8"))
+    return msg
 
+def recvall(sock, n):
+    data = b''
+    while len(data) < n:
+        packet = sock.recv(n - len(data))
+        if not packet:
+            return None
+        data += packet
+    return data
 
-def recieve_loop():
+def encode_message(msg):
+    return json.dumps(msg)
+
+def decode_message(data):
+    return json.loads(data)
+
+def recieve_loop(client,username):
     while True:
         try:
-            data = client.recv(1024)
-            if not data:
+            raw_length = recvall(client,4)
+            if not raw_length:
                 print("[DISCONNECT] Server closed connection")
                 break
-            text = data.decode("utf-8")
             try:
-                msg = json.loads(text)
+                length = struct.unpack("!I", raw_length)[0]
+                data = recvall(client, length)
+                msg = decode_message(data.decode("utf-8"))
+                
                 if msg["type"] == "LOGIN_SUCCESS":
                     print("Login successfully")
-                    join(username)
+                    send_message(client,join(username))
                 if msg["type"] == "LOGIN_FAIL":
                     print("Login failed")
-                    disconnect()
+                    disconnect(client)
                     break
+                
+                if msg["type"] == "NOTICE":
+                    print(f"\n{msg['sender']}: {msg['content']}")
+                    
                 if msg["type"] == "CHAT":
-                    print(f"{msg['sender']}: {msg['content']}")
+                    print(f"\n{msg['sender']}: {msg['content']}")
+
                 if msg["type"] == "PRIVATE":
                     if(msg['receiver'] == username):
-                        print(f"[PRIVATE]{msg['sender']}: {msg['content']}")
+                        print(f"\n[PRIVATE]{msg['sender']}: {msg['content']}")
+
                     else:
                         pass
 
             except json.JSONDecodeError:
-                print("[SERVER RAW]", text)
+                print("[SERVER RAW] lỗi biên dịch json show json raw: ", data.decode("utf-8"))
 
         except:
             print("[ERROR] Connection lost")
             break
 
-def disconnect():
+def disconnect(client,username):
     try:
+        send_message(client,leave(username))
         client.shutdown(socket.SHUT_RDWR) 
-    except OSError:
+    except OSError as e:
+        print(f"Error: {e}")
         pass  
     finally:
-        client.close()  
+        client.close()
     
 
-def send_message(username,msg):
-    chat(username,msg)
+def send_message(client,dict): # done
+    try:
+        data = encode_message(dict).encode("utf-8")
+        length = struct.pack("!I", len(data))
+        client.sendall(length + data)
+    except OSError as e:
+        print(f"[ERROR] Failed to send message: {e}")
+    except Exception as e:
+        print(f"[ERROR] Unexpected error: {e}")
 
-def connect(host,port):
-    global client
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.connect((host, port))
-    print("[CONNECTED]")
 
-connect(SERVER_IP,PORT)
+def connect_to_server(host,port): # done
+    try:
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect((host, port))
+        print("[CONNECTED]")
+        return client
+    except Exception as e:
+        print(f"Error occured:{e}")
+        return None
+    
+
+client = connect_to_server(SERVER_IP,PORT)
 username = input("You name: ")
-login(username)
-
-threading.Thread(target=recieve_loop, daemon=True).start()
+send_message(client,login(username))
+threading.Thread(target=recieve_loop,args = (client,username), daemon=True).start()
 
 while True:
-    msg = input("YOU: ")
+    msg = input()
     if msg.lower() == "q":
-        leave(username)
-        disconnect()
+        disconnect(client,username)
         break
-    send_message(username,msg)
+    elif msg.lower().startswith("/private"):
+        parts = msg.split(" ", 2)
+        
+        if len(parts) >= 3:
+            receiver = parts[1]
+            content = parts[2]
+            send_message(client,private(username,receiver,content))
+            print(f"YOU -> {receiver}: {content}")
+        else:
+            print("Sai cú pháp, vui lòng nhập lại")
+            continue
+    else:    
+        send_message(client,chat(username,msg))
+        print(f"YOU: {msg}")
