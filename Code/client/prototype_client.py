@@ -54,7 +54,7 @@ def leave(username):
         "timestamp": datetime.datetime.now().isoformat()
     }
     return msg
-
+ 
 def error_msg(error):
     msg = {
         "type": "ERROR",
