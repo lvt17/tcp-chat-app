@@ -9,7 +9,7 @@ PORT=8000
 """
 !!! watching the explanation in DOCX/research/prototype_explain !!!
 """
-
+ 
 msg_queue = queue.Queue() # dùng làm queue để tương tác gui
 
 def login(username):
