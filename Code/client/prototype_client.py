@@ -3,11 +3,14 @@ import threading
 import json
 import datetime
 import struct
+import queue
 SERVER_IP='0.0.0.0'
 PORT=8000
 """
 !!! watching the explanation in DOCX/research/prototype_explain !!!
 """
+
+msg_queue = queue.Queue() # dùng làm queue để tương tác gui
 
 def login(username):
     msg = {
@@ -33,7 +36,7 @@ def chat(username, content):
         "timestamp": datetime.datetime.now().isoformat()
     }
     return msg
- 
+
 def private(sender, receiver, content):
     msg = {
         "type": "PRIVATE",
@@ -51,6 +54,15 @@ def leave(username):
         "timestamp": datetime.datetime.now().isoformat()
     }
     return msg
+
+def error_msg(error):
+    msg = {
+        "type": "ERROR",
+        "content": error,
+        "timestamp": datetime.datetime.now().isoformat()
+    }
+    return msg
+
 
 def recvall(sock, n):
     data = b''
@@ -73,38 +85,32 @@ def recieve_loop(client,username):
             raw_length = recvall(client,4)
             if not raw_length:
                 print("[DISCONNECT] Server closed connection")
+                disconnect(client,username)
                 break
             try:
                 length = struct.unpack("!I", raw_length)[0]
                 data = recvall(client, length)
-                msg = decode_message(data.decode("utf-8"))
-                
+                msg = decode_message(data.decode("utf-8")) 
                 if msg["type"] == "LOGIN_SUCCESS":
-                    print("Login successfully")
-                    send_message(client,join(username))
+                    send_message(client,join(username)) 
                 if msg["type"] == "LOGIN_FAIL":
-                    print("Login failed")
-                    disconnect(client)
+                    msg_queue.put(error_msg(msg["type"])) # khi nhận message thì gửi vào queue gui sẽ lấy message để cập nhật gui
+                    disconnect(client,username)
                     break
-                
                 if msg["type"] == "NOTICE":
-                    print(f"\n{msg['sender']}: {msg['content']}")
-                    
+                   msg_queue.put(msg)
                 if msg["type"] == "CHAT":
-                    print(f"\n{msg['sender']}: {msg['content']}")
-
+                   msg_queue.put(msg)
                 if msg["type"] == "PRIVATE":
                     if(msg['receiver'] == username):
-                        print(f"\n[PRIVATE]{msg['sender']}: {msg['content']}")
-
+                        msg_queue.put(msg)
                     else:
                         pass
 
             except json.JSONDecodeError:
-                print("[SERVER RAW] lỗi biên dịch json show json raw: ", data.decode("utf-8"))
-
-        except:
-            print("[ERROR] Connection lost")
+                msg_queue.put(error_msg(f"[SERVER RAW] lỗi biên dịch json show json raw: {data.decode('utf-8')}"))
+        except Exception as e:
+            msg_queue.put(error_msg(f"[ERROR] Connection lost: {e}"))
             break
 
 def disconnect(client,username):
@@ -126,7 +132,7 @@ def send_message(client,dict): # done
     except OSError as e:
         print(f"[ERROR] Failed to send message: {e}")
     except Exception as e:
-        print(f"[ERROR] Unexpected error: {e}")
+         print(f"[ERROR] Unexpected error: {e}")
 
 
 def connect_to_server(host,port): # done
