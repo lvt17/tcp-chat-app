@@ -1,4 +1,7 @@
 import customtkinter as ctk
+import prototype_client
+import threading
+from datetime import datetime
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -7,229 +10,470 @@ ctk.set_default_color_theme("blue")
 class ChatApp(ctk.CTk):
 
     def __init__(self):
+
         super().__init__()
 
         self.title("Chat Client")
-        self.geometry("900x600")
+        self.geometry("1100x700")
 
+        self.client = None
+        self.username = None
         self.selected_user = None
+
+        self.user_colors = {}
 
         self.show_login()
 
-    # ================= LOGIN SCREEN =================
+    # ================= LOGIN =================
+
     def show_login(self):
 
-        bg_frame = ctk.CTkFrame(self, fg_color="transparent")
-        bg_frame.pack(expand=True)
-
-        self.login_frame = ctk.CTkFrame(
-            bg_frame,
-            width=450,
-            height=420,
-            corner_radius=20
-        )
-        self.login_frame.pack(expand=True)
+        frame = ctk.CTkFrame(self)
+        frame.pack(expand=True)
 
         title = ctk.CTkLabel(
-            self.login_frame,
-            text="💬 CHAT CLIENT",
-            font=("Arial", 30, "bold")
+            frame,
+            text="💬 Chat Client",
+            font=("Arial", 34, "bold")
         )
-        title.pack(pady=(30, 10))
-
-        subtitle = ctk.CTkLabel(
-            self.login_frame,
-            text="Realtime Socket Messaging",
-            font=("Arial", 16),
-            text_color="gray"
-        )
-        subtitle.pack(pady=(0, 25))
-
-        username_label = ctk.CTkLabel(
-            self.login_frame,
-            text="Username",
-            font=("Arial", 20)
-        )
-        username_label.pack()
+        title.pack(pady=40)
 
         self.username_entry = ctk.CTkEntry(
-            self.login_frame,
-            width=320,
-            height=42,
-            corner_radius=10,
-            placeholder_text="Enter username"
+            frame,
+            width=300,
+            placeholder_text="Username"
         )
         self.username_entry.pack(pady=10)
 
-        ip_label = ctk.CTkLabel(
-            self.login_frame,
-            text="Server IP",
-            font=("Arial", 20)
-        )
-        ip_label.pack()
-
         self.ip_entry = ctk.CTkEntry(
-            self.login_frame,
-            width=320,
-            height=42,
-            corner_radius=10,
-            placeholder_text="127.0.0.1"
+            frame,
+            width=300,
+            placeholder_text="Server IP"
         )
         self.ip_entry.pack(pady=10)
 
-        connect_btn = ctk.CTkButton(
-            self.login_frame,
-            text="🚀 CONNECT",
-            width=260,
-            height=50,
-            corner_radius=12,
-            font=("Arial", 18, "bold"),
+        btn = ctk.CTkButton(
+            frame,
+            text="CONNECT",
+            width=200,
             command=self.connect
         )
-        connect_btn.pack(pady=30)
+        btn.pack(pady=20)
 
-        self.username_entry.bind("<Return>", lambda event: self.connect())
-        self.ip_entry.bind("<Return>", lambda event: self.connect())
+        self.username_entry.bind("<Return>", lambda e: self.connect())
+        self.ip_entry.bind("<Return>", lambda e: self.connect())
 
     # ================= CONNECT =================
+
     def connect(self):
 
         username = self.username_entry.get()
-        server_ip = self.ip_entry.get()
+        ip = self.ip_entry.get()
 
-        print("Username:", username)
-        print("Server IP:", server_ip)
+        if username == "" or ip == "":
+            return
 
-        # xóa login UI
-        for widget in self.winfo_children():
-            widget.destroy()
+        client = prototype_client.connect_to_server(
+            ip,
+            prototype_client.PORT
+        )
 
-        # mở chat UI
-        self.show_chat()
+        if not client:
+            return
 
-    # ================= CHAT SCREEN =================
-    def show_chat(self):
+        self.client = client
+        self.username = username
+
+        prototype_client.send_message(
+            self.client,
+            prototype_client.login(username)
+        )
+
+        threading.Thread(
+            target=prototype_client.recieve_loop,
+            args=(self.client, username),
+            daemon=True
+        ).start()
+
+        for w in self.winfo_children():
+            w.destroy()
+
+        self.build_chat_ui()
+
+        self.after(100, self.update_messages)
+
+    # ================= CHAT UI =================
+
+    def build_chat_ui(self):
 
         self.grid_columnconfigure(0, weight=3)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        title = ctk.CTkLabel(self,
-                             text="CHAT ROOM",
-                             font=("Arial", 24, "bold"))
+        title = ctk.CTkLabel(
+            self,
+            text="CHAT ROOM",
+            font=("Arial", 24, "bold")
+        )
         title.grid(row=0, column=0, columnspan=2, pady=10)
 
-        # ===== Chat Box =====
-        self.chat_box = ctk.CTkTextbox(self,
-                                       corner_radius=10,
-                                       font=("Arial", 14))
-        self.chat_box.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        # CHAT AREA
+        self.chat_area = ctk.CTkScrollableFrame(self)
+        self.chat_area.grid(
+            row=1, column=0,
+            padx=10, pady=10,
+            sticky="nsew"
+        )
 
-        self.chat_box.configure(state="disabled")
-
-        # ===== User List =====
+        # USER LIST
         self.user_frame = ctk.CTkFrame(self)
-        self.user_frame.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+        self.user_frame.grid(
+            row=1, column=1,
+            padx=10, pady=10,
+            sticky="nsew"
+        )
 
-        user_title = ctk.CTkLabel(self.user_frame,
-                                  text="ONLINE USERS",
-                                  font=("Arial", 16, "bold"))
-        user_title.pack(pady=10)
+        label = ctk.CTkLabel(
+            self.user_frame,
+            text="ONLINE USERS",
+            font=("Arial", 18, "bold")
+        )
+        label.pack(pady=10)
 
-        public_btn = ctk.CTkButton(
+        btn = ctk.CTkButton(
             self.user_frame,
             text="🌐 Public Chat",
-            fg_color="gray",
             command=self.public_chat
         )
-        public_btn.pack(fill="x", padx=5, pady=5)
+        btn.pack(fill="x", padx=5, pady=5)
 
-        self.users = ["user1", "user2", "user3"]
+        self.user_buttons = {}
 
-        for user in self.users:
+        # INPUT
+        self.message_entry = ctk.CTkEntry(
+            self,
+            placeholder_text="Type message..."
+        )
+        self.message_entry.grid(
+            row=2,
+            column=0,
+            padx=10,
+            pady=10,
+            sticky="ew"
+        )
 
-            btn = ctk.CTkButton(self.user_frame,
-                                text="● " + user,
-                                anchor="w",
-                                command=lambda u=user: self.select_user(u))
+        self.message_entry.bind("<Return>", lambda e: self.send_message())
 
-            btn.pack(fill="x", padx=5, pady=3)
+        send_btn = ctk.CTkButton(
+            self,
+            text="Send",
+            command=self.send_message
+        )
+        send_btn.grid(row=2, column=1)
 
-        # ===== Message Input =====
-        self.message_entry = ctk.CTkEntry(self,
-                                          height=40,
-                                          placeholder_text="Type message...")
-        self.message_entry.grid(row=2, column=0, padx=10, pady=10, sticky="ew")
+        disconnect = ctk.CTkButton(
+            self,
+            text="Disconnect",
+            fg_color="red",
+            command=self.disconnect
+        )
+        disconnect.grid(row=3, column=1, pady=10)
 
-        self.message_entry.bind("<Return>", lambda event: self.send_message())
+        self.public_chat()
 
-        # ===== Send Button =====
-        send_btn = ctk.CTkButton(self,
-                                 text="Send",
-                                 width=120,
-                                 command=self.send_message)
-        send_btn.grid(row=2, column=1, padx=10, pady=10)
+    # ================= CHAT BUBBLE =================
 
-        # ===== Disconnect Button =====
-        disconnect_btn = ctk.CTkButton(self,
-                                       text="Disconnect",
-                                       fg_color="red",
-                                       command=self.disconnect)
-        disconnect_btn.grid(row=3, column=1, padx=10, pady=5)
+    def create_bubble(self, sender, text, private=False):
+        if not self.chat_area.winfo_exists():
+            return
+        # Xác định xem đây là tin nhắn của mình hay người khác
+        is_me = (sender == self.username)
+        # Căn lề: 'e' bên phải cho mình, 'w' (West) bên trái cho người khác
+        side = "e" if is_me else "w"
+        
+        # Frame tổng chứa toàn bộ cụm tin nhắn
+        frame = ctk.CTkFrame(self.chat_area, fg_color="transparent")
+        frame.pack(anchor=side, pady=5, padx=10, fill="x")
+
+        # Nội dung bên trong (dùng frame phụ để bọc sát nội dung)
+        bubble_container = ctk.CTkFrame(frame, fg_color="transparent")
+        bubble_container.pack(anchor=side)
+
+        # Header (Tên & Thời gian)
+        color = self.get_user_color(sender)
+        header_text = f"{sender}  {datetime.now().strftime('%H:%M')}"
+        
+        header = ctk.CTkLabel(
+            bubble_container,
+            text=header_text,
+            text_color=color,
+            font=("Arial", 11, "bold")
+        )
+        header.pack(anchor=side, padx=5)
+
+        # Màu sắc bong bóng
+        if private:
+            bubble_color = "#a855f7" # Tím cho tin nhắn riêng
+        else:
+            bubble_color = "#2b7cff" if is_me else "#333333"
+
+        # Nội dung tin nhắn
+        msg = ctk.CTkLabel(
+            bubble_container,
+            text=text,
+            wraplength=400,
+            fg_color=bubble_color,
+            text_color="white",
+            corner_radius=15,
+            padx=12,
+            pady=8
+        )
+        msg.pack(anchor=side)
+
+        canvas = self.chat_area._parent_canvas
+        if canvas.yview()[1] > 0.9:  # đang gần cuối
+            self.after(50, lambda: canvas.yview_moveto(1.0))
+    # ================= USER COLOR =================
+
+    def get_user_color(self, user):
+
+        if user not in self.user_colors:
+
+            import random
+
+            colors = [
+                "#ff6b6b",
+                "#4ecdc4",
+                "#ffe66d",
+                "#1a535c",
+                "#ff9f1c",
+                "#a29bfe"
+            ]
+
+            self.user_colors[user] = random.choice(colors)
+
+        return self.user_colors[user]
 
     # ================= PUBLIC CHAT =================
     def public_chat(self):
+        self.select_user(None)
 
-        self.selected_user = None
-
-        self.chat_box.configure(state="normal")
-        self.chat_box.insert("end", "--- Back to Public Chat ---\n")
-        self.chat_box.see("end")
-        self.chat_box.configure(state="disabled")
-
-    # ================= PRIVATE CHAT =================
+    # ================= USER SELECT =================
     def select_user(self, user):
 
+        # ===== chọn user =====
         self.selected_user = user
 
-        self.chat_box.configure(state="normal")
-        self.chat_box.insert("end",
-                             f"--- Private chat with {user} ---\n")
-        self.chat_box.see("end")
-        self.chat_box.configure(state="disabled")
+        # ===== highlight user đang chọn =====
+        for u, btn in self.user_buttons.items():
+            if u == user:
+                btn.configure(fg_color="#1f6aa5")  # màu đang chọn
+            else:
+                btn.configure(fg_color=("gray75", "gray25")) # reset
 
-    # ================= SEND MESSAGE =================
+        # ===== clear chat =====
+        for widget in self.chat_area.winfo_children():
+            widget.destroy()
+
+        # ===== PRIVATE CHAT =====
+        if user:
+
+            # tiêu đề
+            title = ctk.CTkLabel(
+                self.chat_area,
+                text=f"💬 Chat với {user}",
+                font=("Arial", 16, "bold")
+            )
+            title.pack(pady=5)
+
+            # render lịch sử
+            if hasattr(self, "chat_history") and user in self.chat_history:
+
+                for msg in self.chat_history[user]:
+                    self.create_bubble(
+                        msg["sender"],
+                        msg["content"],
+                        True
+                    )
+
+        # ===== PUBLIC CHAT =====
+        else:
+
+            # tiêu đề
+            title = ctk.CTkLabel(
+                self.chat_area,
+                text="🌐 Public Chat",
+                font=("Arial", 16, "bold")
+            )
+            title.pack(pady=5)
+
+            # render lịch sử public
+            if hasattr(self, "public_history"):
+
+                for msg in self.public_history:
+                    self.create_bubble(
+                        msg["sender"],
+                        msg["content"]
+                    )
+
+        # ===== auto scroll =====
+        #self.after(50, lambda: self.chat_area._parent_canvas.yview_moveto(1.0))   #QUAN TRONG
+
+    # ================= UPDATE USER LIST =================
+
+    def update_user_list(self, users):
+
+        for btn in self.user_buttons.values():
+            btn.destroy()
+
+        self.user_buttons.clear()
+
+        for user in users:
+            if user == self.username:
+                continue
+            btn = ctk.CTkButton(
+                self.user_frame,
+                text="🟢 " + user,
+                anchor="w",
+                command=lambda u=user: self.select_user(u)
+            )
+
+            btn.pack(fill="x", padx=5, pady=3)
+
+            self.user_buttons[user] = btn
+
+    # ================= SEND =================
+
     def send_message(self):
 
         msg = self.message_entry.get()
 
-        if msg != "":
+        if msg == "":
+            return
+        # ===== PRIVATE =====
+        if self.selected_user:
+            prototype_client.send_message(
+                self.client,
+                prototype_client.private(
+                    self.username,
+                    self.selected_user,
+                    msg
+                )
+            )      
+        # ===== PUBLIC =====
+        else:
+            prototype_client.send_message(
+                self.client,
+                prototype_client.chat(
+                    self.username,
+                    msg
+                )
+            )
 
-            self.chat_box.configure(state="normal")
+        self.message_entry.delete(0, "end")
 
-            if self.selected_user:
-                self.chat_box.insert("end",
-                                     f"Me -> {self.selected_user}: {msg}\n")
-            else:
-                self.chat_box.insert("end",
-                                     f"Me (Public): {msg}\n")
+    # ================= UPDATE MESSAGE =================
 
-            self.chat_box.see("end")
-            self.chat_box.configure(state="disabled")
+    def update_messages(self):
 
-            self.message_entry.delete(0, "end")
+        # ❌ nếu UI đã bị destroy → dừng
+        if not hasattr(self, "chat_area") or not self.chat_area.winfo_exists():
+            return
+
+        while not prototype_client.msg_queue.empty():
+
+            msg = prototype_client.msg_queue.get()
+            msg_type = msg.get("type")
+
+            # ===== PUBLIC CHAT =====
+            if msg_type == "CHAT":
+
+                # lưu history
+                if not hasattr(self, "public_history"):
+                    self.public_history = []
+
+                self.public_history.append(msg)
+
+                # chỉ hiển thị khi đang ở public
+                if self.selected_user is None:
+
+                    self.create_bubble(
+                        msg["sender"],
+                        msg["content"]
+                    )
+            # ===== PRIVATE CHAT =====
+            elif msg_type == "PRIVATE":
+
+                sender = msg.get("sender")
+                receiver = msg.get("receiver")
+
+                # chỉ xử lý nếu liên quan tới mình
+                if sender == self.username or receiver == self.username:
+
+                    other_user = receiver if sender == self.username else sender
+
+                    # lưu history
+                    if not hasattr(self, "chat_history"):
+                        self.chat_history = {}
+
+                    if other_user not in self.chat_history:
+                        self.chat_history[other_user] = []
+
+                    self.chat_history[other_user].append(msg)
+
+                    # chỉ hiển thị khi đang mở đúng người
+                    if self.selected_user == other_user:
+
+                        self.create_bubble(
+                            sender,
+                            msg["content"],
+                            True,
+                        )
+            # ===== SYSTEM =====
+            elif msg_type == "SYSTEM":
+
+                self.create_bubble(
+                    "SYSTEM",
+                    msg["content"]
+                )
+            # ===== USER LIST =====
+            elif msg_type == "USER_LIST":
+
+                self.update_user_list(msg["users"])
+
+        #Lưu ID để cancel khi disconnect
+        self.update_job = self.after(100, self.update_messages)
 
     # ================= DISCONNECT =================
+
     def disconnect(self):
 
-        print("Disconnected")
+        if hasattr(self, "update_job"):
+            try:
+                self.after_cancel(self.update_job)
+            except:
+                pass
 
-        for widget in self.winfo_children():
-            widget.destroy()
+        if self.client:
+            prototype_client.disconnect(
+                self.client,
+                self.username
+            )
+            self.client = None
+
+        self.selected_user = None
+
+        if hasattr(self, "chat_history"):
+            self.chat_history.clear()
+
+        if hasattr(self, "public_history"):
+            self.public_history.clear()
+
+        for w in self.winfo_children():
+            w.destroy()
 
         self.show_login()
 
 
-# Run app
 app = ChatApp()
 app.mainloop()
