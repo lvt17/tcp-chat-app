@@ -6,7 +6,8 @@ import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared import protocol
-from server import database
+sys.path.insert(0, os.path.dirname(__file__))
+import database
 
 HOST = '0.0.0.0'
 PORT = 8000
