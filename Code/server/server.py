@@ -77,7 +77,6 @@ def get_online_usernames():
 
 
 def remove_client(addr, username):
-
     with clients_lock:
         client = clients.pop(addr, None)
         if client:
@@ -95,7 +94,6 @@ def remove_client(addr, username):
 
 
 def handle_client(conn, addr):
-
     username = None
 
     try:
@@ -207,7 +205,6 @@ def handle_client(conn, addr):
 
 
 def shutdown_server(sig, frame):
-
     print("\n[SERVER] Shutting down...")
 
     broadcast(protocol.system_msg("Server đang tắt..."))
@@ -228,7 +225,6 @@ def shutdown_server(sig, frame):
 
 
 def start_server():
-
     global server_socket
 
     signal.signal(signal.SIGINT, shutdown_server)
