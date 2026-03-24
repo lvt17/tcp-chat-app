@@ -32,10 +32,13 @@ def encode_message(msg):
 
 # convert json -> dict
 def decode_message(data):
-    return json.loads(data)
+    try:
+        return json.loads(data)
+    except:
+        return None
 
 
-# -------- login --------
+# login 
 
 def login(username):
     return {
@@ -63,7 +66,7 @@ def login_fail(username,reason):
     }
 
 
-# -------- chat --------
+# chat 
 
 def chat(sender, content):
     return {
@@ -74,7 +77,7 @@ def chat(sender, content):
     }
 
 
-# -------- private message --------
+# private message 
 
 def private_msg(sender, receiver, content):
     return {
@@ -86,7 +89,7 @@ def private_msg(sender, receiver, content):
     }
 
 
-# -------- join / leave --------
+# join / leave 
 
 def join(username):
     return {
@@ -104,7 +107,7 @@ def leave(username):
     }
 
 
-# -------- user list --------
+# user list 
 
 def user_list(users):
     return {
@@ -114,7 +117,7 @@ def user_list(users):
     }
 
 
-# -------- system --------
+# system 
 
 def system_msg(text):
     return {
@@ -124,7 +127,7 @@ def system_msg(text):
     }
 
 
-# -------- error --------
+# error 
 
 def error_msg(text):
     return {
@@ -142,6 +145,7 @@ def send_message(sock, msg_dict):
         sock.sendall(length + data)
     except Exception as e:
         print("Send error:", e)
+        sock.close()
 
 
 # receive message from socket
@@ -156,7 +160,17 @@ def recv_message(sock):
         if not data:
             return None
 
-        return decode_message(data.decode("utf-8"))
+        msg = decode_message(data.decode("utf-8"))
+
+        if msg is None:
+            return error_msg("Invalid JSON")
+        
+        valid, err = validate_message(msg)
+        if not valid:
+            return error_msg(err)
+        
+        return msg
+    
 
     except Exception as e:
         print("Receive error:", e)
@@ -172,3 +186,35 @@ def recvall(sock, n):
             return None
         data += packet
     return data
+
+
+# validation 
+
+REQUIRED_FIELDS = {
+    LOGIN: ["type", "username", "timestamp"],
+    CHAT: ["type", "sender", "content", "timestamp"],
+    PRIVATE: ["type", "sender", "receiver", "content", "timestamp"],
+    JOIN: ["type", "username", "timestamp"],
+    LEAVE: ["type", "username", "timestamp"],
+    USER_LIST: ["type", "users", "timestamp"],
+}
+
+def validate_message(msg):
+    if not isinstance(msg, dict):
+        return False, "Message không hợp lệ"
+
+    msg_type = msg.get("type")
+    if msg_type not in REQUIRED_FIELDS:
+        return False, "Unknown type"
+
+    for field in REQUIRED_FIELDS[msg_type]:
+        if field not in msg or msg[field] is None:
+            return False, f"Thiếu field: {field}"
+
+    if "content" in msg:
+        if not msg["content"].strip():
+            return False, "Content rỗng"
+        if len(msg["content"]) > 1000:
+            return False, "Content quá dài"
+
+    return True, None
