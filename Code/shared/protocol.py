@@ -192,11 +192,16 @@ def recvall(sock, n):
 
 REQUIRED_FIELDS = {
     LOGIN: ["type", "username", "timestamp"],
+    LOGIN_SUCCESS: ["type", "username", "message", "timestamp"],
+    LOGIN_FAIL: ["type", "username", "reason", "timestamp"],
     CHAT: ["type", "sender", "content", "timestamp"],
     PRIVATE: ["type", "sender", "receiver", "content", "timestamp"],
     JOIN: ["type", "username", "timestamp"],
     LEAVE: ["type", "username", "timestamp"],
     USER_LIST: ["type", "users", "timestamp"],
+    SYSTEM: ["type", "content", "timestamp"],
+    ERROR: ["type", "message", "timestamp"]
+
 }
 
 def validate_message(msg):
