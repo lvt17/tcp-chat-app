@@ -375,8 +375,6 @@ class ChatApp(ctk.CTk):
     # ================= UPDATE MESSAGE =================
 
     def update_messages(self):
-
-        # ❌ nếu UI đã bị destroy → dừng
         if not hasattr(self, "chat_area") or not self.chat_area.winfo_exists():
             return
 

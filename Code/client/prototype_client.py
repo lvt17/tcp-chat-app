@@ -1,6 +1,5 @@
 import socket
-import threading
-import json
+import struct
 import queue
 import sys
 import os
@@ -8,102 +7,106 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared import protocol
 
-SERVER_IP='0.0.0.0'
-PORT=8000
-"""
-!!! watching the explanation in DOCX/research/prototype_explain !!!
-"""
- 
-msg_queue = queue.Queue() # dùng làm queue để tương tác gui
+SERVER_IP = '0.0.0.0'
+PORT = 8000
+
+msg_queue = queue.Queue()
 
 
-def recieve_loop(client,username):
-   while True:
+
+def recieve_loop(client, username):   
+    while True:
         try:
             msg = protocol.recv_message(client)
+
             if msg is None:
-                print("không nhận được dữ liệu hoặc lỗi")
+                print("[DISCONNECT] Server closed")
                 disconnect(client, username)
                 break
 
-            if msg["type"] == "LOGIN_SUCCESS":
-                protocol.send_message(client, protocol.join(username))
+            msg_type = msg.get("type")
 
-            elif msg["type"] == "LOGIN_FAIL":
-                msg_queue.put(protocol.error_msg(msg["type"]))
+            # ===== LOGIN =====
+            if msg_type == protocol.LOGIN_SUCCESS:
+                send_message(client, protocol.join(username))
+
+            elif msg_type == protocol.LOGIN_FAIL:
+                msg_queue.put({
+                    "type": "SYSTEM",
+                    "content": msg.get("reason")
+                })
                 disconnect(client, username)
                 break
 
-            elif msg["type"] == "NOTICE":
+            # ===== CHAT =====
+            elif msg_type == protocol.CHAT:
                 msg_queue.put(msg)
 
-            elif msg["type"] == "CHAT":
-                print(msg["content"])
+            # ===== PRIVATE =====
+            elif msg_type == protocol.PRIVATE:
+                if msg.get("receiver") == username or msg.get("sender") == username:
+                    msg_queue.put(msg)
+
+            # ===== SYSTEM =====
+            elif msg_type == protocol.SYSTEM:
                 msg_queue.put(msg)
 
-            elif msg["type"] == "PRIVATE":
-                if msg['receiver'] == username:
-                   msg_queue.put(msg)
-        
-        except json.JSONDecodeError as e:
-            raw_data = getattr(e, "doc", None)
-            msg_queue.put(protocol.error_msg(
-                f"[SERVER RAW] lỗi biên dịch JSON, dữ liệu: {raw_data}"
-            ))
-            # không break, chỉ bỏ qua message lỗi và tiếp tục vòng lặp
-            continue
+            # ===== USER LIST =====
+            elif msg_type == protocol.USER_LIST:
+                msg_queue.put(msg)
+
+            # ===== ERROR =====
+            elif msg_type == protocol.ERROR:
+                msg_queue.put({
+                    "type": "SYSTEM",
+                    "content": msg.get("message")
+                })
 
         except Exception as e:
-            msg_queue.put(protocol.error_msg(f"Lỗi không xác định: {e}"))
-            disconnect(client, username)   # đóng socket luôn
-            return  # kết thúc thread
+            msg_queue.put({
+                "type": "SYSTEM",
+                "content": f"Lỗi: {e}"
+            })
+            break
+
+
+def send_message(client, msg):
+    protocol.send_message(client, msg)   
 
 
 
-def disconnect(client,username):
-    try:
-        protocol.send_message(client, protocol.leave(username))
-        client.shutdown(socket.SHUT_RDWR) 
-    except OSError as e:
-        print(f"Error: {e}")
-        pass  
-    finally:
-        client.close()
-    
-
-def connect_to_server(host,port): # done
+def connect_to_server(host, port):
     try:
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.connect((host, port))
         print("[CONNECTED]")
         return client
     except Exception as e:
-        print(f"Error occured:{e}")
+        print(f"Error occured: {e}")
         return None
-    
 
-client = connect_to_server(SERVER_IP,PORT)
-username = input("You name: ")
-protocol.send_message(client,protocol.login(username))
 
-threading.Thread(target=recieve_loop,args = (client,username), daemon=True).start()
+def disconnect(client, username):
+    try:
+        send_message(client, protocol.leave(username))
+        client.shutdown(socket.SHUT_RDWR)
+    except:
+        pass
+    finally:
+        client.close()
 
-while True:
-    msg = input()
-    if msg.lower() == "q":
-        disconnect(client,username)
-        break
-    elif msg.lower().startswith("/private"):
-        parts = msg.split(" ", 2)
-        
-        if len(parts) >= 3:
-            receiver = parts[1]
-            content = parts[2]
-            protocol.send_message(client,protocol.private_msg(username,receiver,content))
-            print(f"YOU -> {receiver}: {content}")
-        else:
-            print("Sai cú pháp, vui lòng nhập lại")
-            continue
-    else:    
-        protocol.send_message(client,protocol.chat(username,msg))
-        print(f"YOU: {msg}")
+
+def private(sender, receiver, content):
+    return protocol.private_msg(sender, receiver, content)
+
+def chat(sender, content):
+    return protocol.chat(sender, content)
+
+def login(username):
+    return protocol.login(username)
+
+def join(username):
+    return protocol.join(username)
+
+def leave(username):
+    return protocol.leave(username)
