@@ -254,3 +254,117 @@ Tất cả message được gửi dưới dạng **JSON**.
   "timestamp": "2025-03-06T20:00:00"
 }
 ```
+## 3. Các hàm hỗ trợ (Utility Functions)
+
+Trong file protocol.py, hệ thống sử dụng một số hàm hỗ trợ để tạo và xử lý message.
+Các hàm này giúp dữ liệu giữa client và server luôn thống nhất về định dạng.
+
+get_time(): tạo thời gian hiện tại theo chuẩn UTC để gắn vào trường timestamp
+encode_message(msg): chuyển message từ kiểu dict sang chuỗi JSON trước khi gửi
+decode_message(data): chuyển chuỗi JSON nhận được thành dict để chương trình xử lý
+
+Nhờ các hàm này, mọi message trong hệ thống đều có cấu trúc rõ ràng, dễ kiểm tra và dễ mở rộng.
+
+## 4. Truyền và nhận message
+
+Vì hệ thống sử dụng TCP, dữ liệu được truyền dưới dạng một luồng byte liên tục.
+Nếu chỉ gửi JSON trực tiếp, có thể xảy ra lỗi như thiếu dữ liệu hoặc nhiều message bị dính vào nhau.
+Để tránh vấn đề này, hệ thống sử dụng cơ chế length-prefixed framing, nghĩa là mỗi message được gửi theo định dạng:
+
+```
+{
+  [4 byte độ dài][dữ liệu JSON]
+}
+```
+
+
+
+Trong đó:
+
+4 byte đầu tiên dùng để lưu độ dài của message
+phần sau là nội dung JSON đã được mã hóa bằng UTF-8
+
+Cách làm này giúp server và client biết chính xác cần đọc bao nhiêu byte cho mỗi message.
+
+### 4.1. Gửi message
+
+Hàm send_message(sock, msg_dict) được dùng để gửi message qua socket.
+
+Quy trình thực hiện gồm:
+
+Chuyển message từ dict sang chuỗi JSON
+Mã hóa chuỗi JSON thành UTF-8 bytes
+Đóng gói độ dài của message vào 4 byte bằng struct.pack()
+Gửi toàn bộ dữ liệu qua socket bằng sock.sendall()
+
+Nếu xảy ra lỗi khi gửi, hệ thống sẽ in thông báo "Send error" và đóng socket.
+
+### 4.2. Nhận message
+
+Hàm recv_message(sock) được dùng để nhận message từ socket.
+
+Quy trình thực hiện gồm:
+
+Đọc 4 byte đầu tiên để xác định độ dài của message
+Đọc tiếp đúng số byte của phần nội dung JSON
+Giải mã dữ liệu từ bytes sang chuỗi UTF-8
+Chuyển chuỗi JSON thành dict bằng decode_message()
+Kiểm tra tính hợp lệ bằng validate_message()
+
+Nếu dữ liệu JSON không hợp lệ, hàm sẽ trả về một message ERROR với nội dung như "Invalid JSON".
+Nếu message sai định dạng hoặc thiếu thông tin bắt buộc, hệ thống cũng sẽ trả về ERROR.
+Nếu kết nối bị đóng hoặc có lỗi khi nhận dữ liệu, hàm sẽ trả về None.
+
+### 4.3. Đọc đủ số byte cần thiết
+
+Do sock.recv() không đảm bảo sẽ trả về đủ dữ liệu chỉ trong một lần gọi, hệ thống sử dụng hàm recvall(sock, n) để đọc chính xác n byte.
+
+Hàm này sẽ:
+
+lặp liên tục để đọc dữ liệu từ socket
+dừng khi đã nhận đủ số byte yêu cầu
+trả về None nếu kết nối bị đóng giữa chừng
+
+Hàm recvall() rất quan trọng vì nó đảm bảo message được nhận đầy đủ trước khi tiến hành giải mã và kiểm tra.
+
+## 5. Kiểm tra tính hợp lệ của message (Validation)
+
+Sau khi message được nhận và giải mã từ JSON, hệ thống sử dụng hàm validate_message() để kiểm tra xem dữ liệu có đúng định dạng giao thức hay không trước khi xử lý.
+
+Việc kiểm tra bao gồm:
+
+Kiểm tra kiểu dữ liệu: message phải là một đối tượng kiểu dict
+Kiểm tra loại message: trường type phải thuộc các loại message được hệ thống hỗ trợ
+Kiểm tra các trường bắt buộc: mỗi loại message phải có đầy đủ các field cần thiết theo định nghĩa của giao thức
+Kiểm tra nội dung tin nhắn (content):
+không được để trống
+không được vượt quá độ dài tối đa cho phép
+
+Nếu message không hợp lệ, hàm sẽ trả về trạng thái lỗi kèm theo nguyên nhân, ví dụ:
+
+Unknown type
+Thiếu field: sender
+Content rỗng
+Content quá dài
+
+Nếu phát hiện lỗi, hệ thống sẽ không xử lý tiếp message đó mà tạo một message ERROR để phản hồi.
+Nhờ bước kiểm tra này, hệ thống tránh được việc xử lý các message sai định dạng, thiếu dữ liệu hoặc có nội dung không hợp lệ, từ đó giúp giao tiếp giữa client và server ổn định và an toàn hơn.
+
+## 6. Luồng hoạt động của giao thức
+
+Luồng giao tiếp cơ bản của hệ thống chat diễn ra như sau:
+
+Client kết nối đến server bằng TCP socket
+Client gửi message LOGIN để đăng nhập với tên người dùng
+Server kiểm tra tên người dùng:
+nếu hợp lệ → gửi LOGIN_SUCCESS
+nếu không hợp lệ → gửi LOGIN_FAIL
+Sau khi đăng nhập thành công, client gửi JOIN để tham gia phòng chat
+Server cập nhật và gửi danh sách người dùng online bằng USER_LIST
+Sau đó client có thể:
+gửi CHAT để nhắn tin công khai trong phòng chat
+gửi PRIVATE để nhắn tin riêng cho một người dùng khác
+Khi rời hệ thống, client gửi LEAVE
+Server thông báo người dùng rời đi và cập nhật lại danh sách online
+
+Luồng này giúp quá trình đăng nhập, gửi tin nhắn và quản lý người dùng được thực hiện rõ ràng, nhất quán và dễ mở rộng.
