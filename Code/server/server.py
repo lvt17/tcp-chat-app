@@ -6,6 +6,7 @@ import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared import protocol
+from server import database
 
 HOST = '0.0.0.0'
 PORT = 8000
@@ -107,14 +108,30 @@ def handle_client(conn, addr):
                 print(f"[LOGIN] {username} logged in")
 
             elif msg_type == protocol.JOIN:
-                broadcast(protocol.system_msg(f"{username} đã tham gia"), exclude_addr=addr)
+                broadcast(protocol.system_msg(f"{username} da tham gia"), exclude_addr=addr)
                 protocol.send_message(conn, protocol.user_list(get_online_usernames()))
 
+                # gui lich su chat cho client moi
+                history = database.get_recent_messages(50)
+                for h in history:
+                    protocol.send_message(conn, protocol.chat(h["sender"], h["content"]))
+
             elif msg_type == protocol.CHAT:
+                database.save_message(
+                    sender=msg.get("sender"),
+                    content=msg.get("content"),
+                    timestamp=msg.get("timestamp")
+                )
                 broadcast(msg, exclude_addr=addr)
 
             elif msg_type == protocol.PRIVATE:
                 receiver = msg.get("receiver")
+                database.save_message(
+                    sender=msg.get("sender"),
+                    content=msg.get("content"),
+                    timestamp=msg.get("timestamp"),
+                    receiver=receiver
+                )
                 send_private(msg, receiver, conn)
 
             elif msg_type == protocol.LEAVE:
@@ -149,6 +166,9 @@ def start_server():
     """Khởi tạo server TCP và bắt đầu lắng nghe kết nối."""
     global server_socket
     signal.signal(signal.SIGINT, shutdown_server)
+
+    database.init_db()
+    print("[SERVER] Database initialized")
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
