@@ -8,6 +8,25 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared import protocol
 
 DEFAULT_PORT = 8000
+DISCOVER_PORT = 9999
+
+
+def discover_server(timeout=3):
+    """Lang nghe UDP broadcast de tu tim server tren LAN. Tra ve (ip, port) hoac None."""
+    udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    udp_sock.bind(("", DISCOVER_PORT))
+    udp_sock.settimeout(timeout)
+    try:
+        data, addr = udp_sock.recvfrom(1024)
+        msg = data.decode("utf-8")
+        if msg.startswith("CHAT_SERVER:"):
+            port = int(msg.split(":")[1])
+            return (addr[0], port)
+    except socket.timeout:
+        return None
+    finally:
+        udp_sock.close()
 
 msg_queue = queue.Queue()
 
@@ -115,10 +134,22 @@ def leave(username):
 if __name__ == "__main__":
     import threading
 
-    ip = input("Server IP (default 127.0.0.1): ") or "127.0.0.1"
+    ip = input("Server IP (Enter de tu tim): ").strip()
+    port = DEFAULT_PORT
+
+    if not ip:
+        print("Dang tim server tren mang LAN...")
+        result = discover_server(timeout=3)
+        if result:
+            ip, port = result
+            print(f"Tim thay server: {ip}:{port}")
+        else:
+            print("Khong tim thay server. Nhap IP thu cong:")
+            ip = input("Server IP: ").strip() or "127.0.0.1"
+
     username = input("Username: ")
 
-    client = connect_to_server(ip, DEFAULT_PORT)
+    client = connect_to_server(ip, port)
     if not client:
         print("Khong ket noi duoc server")
         sys.exit(1)

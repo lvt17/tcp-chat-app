@@ -11,6 +11,7 @@ import database
 
 HOST = '0.0.0.0'
 PORT = 8000
+DISCOVER_PORT = 9999
 
 clients = {}
 clients_lock = threading.Lock()
@@ -224,6 +225,20 @@ def shutdown_server(sig, frame):
     sys.exit(0)
 
 
+def broadcast_presence():
+    """Gui tin hieu UDP broadcast de client tren LAN tu tim server."""
+    udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    msg = f"CHAT_SERVER:{PORT}".encode("utf-8")
+    while True:
+        try:
+            udp_sock.sendto(msg, ("<broadcast>", DISCOVER_PORT))
+        except Exception:
+            pass
+        import time
+        time.sleep(2)
+
+
 def start_server():
     global server_socket
 
@@ -231,6 +246,9 @@ def start_server():
 
     database.init_db()
     print("[SERVER] Database initialized")
+
+    threading.Thread(target=broadcast_presence, daemon=True).start()
+    print(f"[SERVER] Auto-discover broadcasting on UDP port {DISCOVER_PORT}")
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 

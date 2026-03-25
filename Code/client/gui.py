@@ -52,6 +52,15 @@ class ChatApp(ctk.CTk):
         )
         self.ip_entry.pack(pady=10)
 
+        find_btn = ctk.CTkButton(
+            frame,
+            text="Find Server",
+            width=200,
+            fg_color="#555555",
+            command=self.auto_find_server
+        )
+        find_btn.pack(pady=5)
+
         btn = ctk.CTkButton(
             frame,
             text="CONNECT",
@@ -62,6 +71,28 @@ class ChatApp(ctk.CTk):
 
         self.username_entry.bind("<Return>", lambda e: self.connect())
         self.ip_entry.bind("<Return>", lambda e: self.connect())
+
+    # ================= AUTO FIND =================
+
+    def auto_find_server(self):
+        """Tim server tren LAN bang UDP broadcast."""
+        import threading
+
+        def _find():
+            result = prototype_client.discover_server(timeout=3)
+            if result:
+                ip, port = result
+                self.after(0, lambda: self._fill_ip(ip))
+            else:
+                self.after(0, lambda: self._fill_ip("Khong tim thay"))
+
+        self.ip_entry.delete(0, "end")
+        self.ip_entry.insert(0, "Dang tim...")
+        threading.Thread(target=_find, daemon=True).start()
+
+    def _fill_ip(self, ip):
+        self.ip_entry.delete(0, "end")
+        self.ip_entry.insert(0, ip)
 
     # ================= CONNECT =================
 
