@@ -101,13 +101,15 @@ def handle_client(conn, addr):
         while True:
 
             msg = protocol.recv_message(conn)
-
             if msg is None:
+                print(f"[DISCONNECT] {addr}")
                 break
 
             msg_type = msg.get("type")
-
-            print(f"[{addr}] {msg_type}: {msg}")
+            if msg_type == protocol.ERROR:
+                print(f"[VALIDATION FAIL] {addr}: {msg.get('message')}")
+            else:
+                print(f"[RECV] {addr} ({msg_type}): {msg}")
 
             # ================= LOGIN =================
             if msg_type == protocol.LOGIN:

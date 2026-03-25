@@ -158,18 +158,43 @@ if __name__ == "__main__":
 
     threading.Thread(target=recieve_loop, args=(client, username), daemon=True).start()
 
+    # thread in tin nhan tu queue ra man hinh terminal
+    def print_loop():
+        while True:
+            try:
+                msg = msg_queue.get()
+                m_type = msg.get("type")
+                if m_type == "SYSTEM":
+                    print(f"\n[SYSTEM] {msg.get('content')}")
+                elif m_type == protocol.CHAT:
+                    print(f"\n[{msg.get('sender')}] {msg.get('content')}")
+                elif m_type == protocol.PRIVATE:
+                    print(f"\n[PM tu {msg.get('sender')}] {msg.get('content')}")
+                elif m_type == protocol.USER_LIST:
+                    print(f"\n[USERS] {', '.join(msg.get('users'))}")
+            except:
+                break
+
+    threading.Thread(target=print_loop, daemon=True).start()
+
     print("Commands: /pm <user> <msg> = private | q = quit")
     while True:
-        msg = input()
-        if msg.lower() == "q":
-            disconnect(client, username)
-            break
-        elif msg.startswith("/pm "):
-            parts = msg.split(" ", 2)
-            if len(parts) >= 3:
-                send_message(client, private(username, parts[1], parts[2]))
-                print(f"[-> {parts[1]}] {parts[2]}")
+        try:
+            msg = input("> ") # them prompt de biet dang cho nhap
+            if not msg: continue
+            if msg.lower() == "q":
+                disconnect(client, username)
+                break
+            elif msg.startswith("/pm "):
+                parts = msg.split(" ", 2)
+                if len(parts) >= 3:
+                    send_message(client, private(username, parts[1], parts[2]))
+                else:
+                    print("Usage: /pm <username> <message>")
             else:
-                print("Usage: /pm <username> <message>")
-        else:
-            send_message(client, chat(username, msg))
+                send_message(client, chat(username, msg))
+        except EOFError:
+            break
+        except Exception as e:
+            print(f"Lỗi nhập liệu: {e}")
+            break
