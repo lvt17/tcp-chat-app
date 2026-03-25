@@ -7,7 +7,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from shared import protocol
 
-SERVER_IP = '0.0.0.0'
+SERVER_IP = '127.0.0.1'
 PORT = 8000
 
 msg_queue = queue.Queue()
