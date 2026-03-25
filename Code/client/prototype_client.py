@@ -109,3 +109,36 @@ def join(username):
 
 def leave(username):
     return protocol.leave(username)
+
+
+# chay truc tiep de test terminal (khong anh huong khi GUI import)
+if __name__ == "__main__":
+    import threading
+
+    ip = input("Server IP (default 127.0.0.1): ") or "127.0.0.1"
+    username = input("Username: ")
+
+    client = connect_to_server(ip, DEFAULT_PORT)
+    if not client:
+        print("Khong ket noi duoc server")
+        sys.exit(1)
+
+    send_message(client, login(username))
+
+    threading.Thread(target=recieve_loop, args=(client, username), daemon=True).start()
+
+    print("Commands: /pm <user> <msg> = private | q = quit")
+    while True:
+        msg = input()
+        if msg.lower() == "q":
+            disconnect(client, username)
+            break
+        elif msg.startswith("/pm "):
+            parts = msg.split(" ", 2)
+            if len(parts) >= 3:
+                send_message(client, private(username, parts[1], parts[2]))
+                print(f"[-> {parts[1]}] {parts[2]}")
+            else:
+                print("Usage: /pm <username> <message>")
+        else:
+            send_message(client, chat(username, msg))
