@@ -75,7 +75,7 @@ class ChatApp(ctk.CTk):
 
         client = prototype_client.connect_to_server(
             ip,
-            prototype_client.PORT
+            prototype_client.DEFAULT_PORT
         )
 
         if not client:
