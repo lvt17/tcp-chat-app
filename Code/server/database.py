@@ -2,7 +2,7 @@ import sqlite3
 import threading
 
 DB_PATH = "chat_history.db"
-db_lock = threading.Lock()
+db_lock = threading.Lock()  
 
 
 def init_db():
@@ -36,17 +36,20 @@ def save_message(sender, content, timestamp, receiver=None):
         conn.close()
 
 
-def get_recent_messages(limit=50):
-    """Lay N tin nhan gan nhat (chi tin public)."""
+def get_recent_messages(username,limit=50):
+    """Lay N tin nhan gan nhat (tin public va private)."""
     with db_lock:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT sender, content, timestamp, receiver FROM messages "
-            "WHERE receiver IS NULL "
-            "ORDER BY id DESC LIMIT ?",
-            (limit,)
-        )
+        cursor.execute("""
+            SELECT sender, content, timestamp, receiver
+            FROM messages
+            WHERE receiver IS NULL
+               OR sender = ?
+               OR receiver = ?
+            ORDER BY id DESC
+            LIMIT ?
+        """, (username, username, limit) )
         rows = cursor.fetchall()
         conn.close()
 

@@ -158,16 +158,27 @@ def handle_client(conn, addr):
                 broadcast_user_list()
 
                 # gửi lịch sử chat cho client mới
-                history = database.get_recent_messages(50)
+                history = database.get_recent_messages(username,50)
 
                 for h in history:
-                    protocol.send_message(
-                        conn,
-                        protocol.chat(
-                            h["sender"],
-                            h["content"]
+                    if h.get("receiver"):  
+                        if h["sender"] == username or h["receiver"] == username:
+                            protocol.send_message(
+                                conn,
+                                protocol.private_msg(
+                                    h["sender"],
+                                    h["receiver"],
+                                    h["content"]
+                                )
+                            )
+                    else:  
+                        protocol.send_message(
+                            conn,
+                            protocol.chat(
+                                h["sender"],
+                                h["content"]
+                            )
                         )
-                    )
 
             # ================= PUBLIC CHAT =================
             elif msg_type == protocol.CHAT:

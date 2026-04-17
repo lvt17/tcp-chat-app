@@ -470,7 +470,6 @@ class ChatApp(ctk.CTk):
 
                 self.update_user_list(msg["users"])
 
-        #Lưu ID để cancel khi disconnect
         self.update_job = self.after(100, self.update_messages)
 
     # ================= DISCONNECT =================
