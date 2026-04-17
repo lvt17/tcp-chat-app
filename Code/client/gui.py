@@ -22,8 +22,8 @@ class ChatApp(ctk.CTk):
 
         self.user_colors = {}
 
-        self.show_login()
-
+        self.show_login()  
+    
     # ================= LOGIN =================
 
     def show_login(self):
@@ -260,10 +260,11 @@ class ChatApp(ctk.CTk):
             pady=8
         )
         msg.pack(anchor=side)
-
+        frame.update_idletasks()
+        self.chat_area.update_idletasks()
         canvas = self.chat_area._parent_canvas
-        if canvas.yview()[1] > 0.9:  # đang gần cuối
-            self.after(50, lambda: canvas.yview_moveto(1.0))
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        self.smooth_scroll_to_bottom()
     # ================= USER COLOR =================
 
     def get_user_color(self, user):
@@ -470,7 +471,31 @@ class ChatApp(ctk.CTk):
 
                 self.update_user_list(msg["users"])
 
-        self.update_job = self.after(100, self.update_messages)
+        self.update_job = self.after(40, self.update_messages)
+    # ================== Scroll ===================
+    def smooth_scroll_to_bottom(self):
+            canvas = self.chat_area._parent_canvas
+
+            start = canvas.yview()[0]
+            end = 1.0
+
+            # Nếu đã gần cuối thì khỏi animate
+            if start > 0.95:
+                canvas.yview_moveto(1.0)
+                return
+
+            steps = 10  # càng lớn càng mượt
+            delta = (end - start) / steps
+
+            def animate(step=0):
+                if step >= steps:
+                    canvas.yview_moveto(1.0)
+                    return
+
+                canvas.yview_moveto(start + delta * step)
+                self.after(10, lambda: animate(step + 1))
+
+            animate()  
 
     # ================= DISCONNECT =================
 
