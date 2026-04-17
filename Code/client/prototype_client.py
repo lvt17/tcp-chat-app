@@ -12,18 +12,51 @@ DISCOVER_PORT = 9999
 
 
 def discover_server(timeout=3):
-    """Lang nghe UDP broadcast de tu tim server tren LAN. Tra ve (ip, port) hoac None."""
+    """Tim server tren LAN qua UDP broadcast/passive + active probe.
+
+    Tra ve (ip, port) hoac None.
+    """
     udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    udp_sock.bind(("", DISCOVER_PORT))
-    udp_sock.settimeout(timeout)
+    udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    udp_sock.settimeout(0.5)
+
+    listening_mode = True
     try:
-        data, addr = udp_sock.recvfrom(1024)
-        msg = data.decode("utf-8")
-        if msg.startswith("CHAT_SERVER:"):
-            port = int(msg.split(":")[1])
-            return (addr[0], port)
-    except socket.timeout:
+        # Passive mode: nhan broadcast dinh ky tu server.
+        udp_sock.bind(("", DISCOVER_PORT))
+    except OSError:
+        # Port da duoc dung (vd server/client cung may), fallback active mode.
+        listening_mode = False
+        udp_sock.bind(("", 0))
+
+    # Chu dong yeu cau server tra loi de tang ti le tim thay tren mot so mang Wi-Fi.
+    try:
+        udp_sock.sendto(b"DISCOVER_CHAT_SERVER", ("255.255.255.255", DISCOVER_PORT))
+    except Exception:
+        pass
+
+    import time
+    deadline = time.time() + max(timeout, 0.5)
+
+    try:
+        while time.time() < deadline:
+            try:
+                data, addr = udp_sock.recvfrom(1024)
+            except socket.timeout:
+                continue
+
+            msg = data.decode("utf-8", errors="ignore")
+            if msg.startswith("CHAT_SERVER:"):
+                try:
+                    port = int(msg.split(":", 1)[1])
+                    return (addr[0], port)
+                except ValueError:
+                    continue
+
+            # Nếu đang passive mode, hết 0.5s timeout vẫn tiếp tục nghe đến deadline.
+            if listening_mode:
+                continue
         return None
     finally:
         udp_sock.close()
