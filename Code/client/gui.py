@@ -5,7 +5,8 @@ from datetime import datetime
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
-
+ctk.set_widget_scaling(1.0)   
+ctk.set_window_scaling(1.0)   
 
 class ChatApp(ctk.CTk):
 
@@ -19,7 +20,7 @@ class ChatApp(ctk.CTk):
         self.client = None
         self.username = None
         self.selected_user = None
-
+        self.is_auto_scrolling = False
         self.user_colors = {}
 
         self.show_login()  
@@ -238,7 +239,7 @@ class ChatApp(ctk.CTk):
             bubble_container,
             text=header_text,
             text_color=color,
-            font=("Arial", 11, "bold")
+            font=("Segoe UI", 11, "bold")
         )
         header.pack(anchor=side, padx=5)
 
@@ -257,14 +258,11 @@ class ChatApp(ctk.CTk):
             text_color="white",
             corner_radius=15,
             padx=12,
-            pady=8
+            pady=8,
+            font=("Segoe UI", 12)
         )
         msg.pack(anchor=side)
-        frame.update_idletasks()
-        self.chat_area.update_idletasks()
-        canvas = self.chat_area._parent_canvas
-        canvas.configure(scrollregion=canvas.bbox("all"))
-        self.smooth_scroll_to_bottom()
+        self.after_idle(self.auto_scroll_if_needed)
     # ================= USER COLOR =================
 
     def get_user_color(self, user):
@@ -347,10 +345,7 @@ class ChatApp(ctk.CTk):
                         msg["sender"],
                         msg["content"]
                     )
-
-        # ===== auto scroll =====
-        #self.after(50, lambda: self.chat_area._parent_canvas.yview_moveto(1.0))   #QUAN TRONG
-
+        self.after(100, self.scroll_to_bottom)
     # ================= UPDATE USER LIST =================
 
     def update_user_list(self, users):
@@ -471,31 +466,62 @@ class ChatApp(ctk.CTk):
 
                 self.update_user_list(msg["users"])
 
-        self.update_job = self.after(40, self.update_messages)
+        self.update_job = self.after(100, self.update_messages)
     # ================== Scroll ===================
+    def scroll_to_bottom(self):
+
+        if not hasattr(self, "chat_area"):
+            return
+
+        canvas = self.chat_area._parent_canvas
+
+        self.update_idletasks()
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        canvas.yview_moveto(1.0)
+
+
     def smooth_scroll_to_bottom(self):
-            canvas = self.chat_area._parent_canvas
 
-            start = canvas.yview()[0]
-            end = 1.0
+        if self.is_auto_scrolling:
+            return
 
-            # Nếu đã gần cuối thì khỏi animate
-            if start > 0.95:
+        canvas = self.chat_area._parent_canvas
+
+        top, bottom = canvas.yview()
+
+        if bottom < 0.92:
+            return
+
+        self.is_auto_scrolling = True
+
+        start = top
+        end = 1.0
+        steps = 8
+        delta = (end - start) / steps
+
+        def animate(step=0):
+            if step >= steps:
                 canvas.yview_moveto(1.0)
+                self.is_auto_scrolling = False
                 return
 
-            steps = 10  # càng lớn càng mượt
-            delta = (end - start) / steps
+            canvas.yview_moveto(start + delta * step)
+            self.after(12, lambda: animate(step + 1))
 
-            def animate(step=0):
-                if step >= steps:
-                    canvas.yview_moveto(1.0)
-                    return
+        animate()
 
-                canvas.yview_moveto(start + delta * step)
-                self.after(10, lambda: animate(step + 1))
 
-            animate()  
+    def auto_scroll_if_needed(self):
+        if not hasattr(self, "chat_area"):
+            return
+
+        canvas = self.chat_area._parent_canvas
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+        top, bottom = canvas.yview()
+
+        if bottom > 0.90:
+            self.smooth_scroll_to_bottom()
 
     # ================= DISCONNECT =================
 
