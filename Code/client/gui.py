@@ -20,9 +20,9 @@ class ChatApp(ctk.CTk):
         self.client = None
         self.username = None
         self.selected_user = None
-        self.is_auto_scrolling = False
-        self.user_colors = {}
 
+        self.user_colors = {}
+        self.loading_history = False
         self.show_login()  
     
     # ================= LOGIN =================
@@ -132,7 +132,7 @@ class ChatApp(ctk.CTk):
 
         self.build_chat_ui()
 
-        self.after(100, self.update_messages)
+        self.after(150, self.update_messages)
 
     # ================= CHAT UI =================
 
@@ -262,7 +262,20 @@ class ChatApp(ctk.CTk):
             font=("Segoe UI", 12)
         )
         msg.pack(anchor=side)
-        self.after_idle(self.auto_scroll_if_needed)
+        canvas = self.chat_area._parent_canvas
+
+        if not self.loading_history:  
+            if canvas.yview()[1] > 0.9:
+                self.after(100, lambda: canvas.yview_moveto(1.0))
+
+    def scroll_to_bottom(self):
+        if not self.chat_area.winfo_exists():
+            return
+        self.update_idletasks()  # cực kỳ quan trọng
+        canvas = self.chat_area._parent_canvas
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        canvas.yview_moveto(1.0)
+
     # ================= USER COLOR =================
 
     def get_user_color(self, user):
@@ -318,14 +331,14 @@ class ChatApp(ctk.CTk):
 
             # render lịch sử
             if hasattr(self, "chat_history") and user in self.chat_history:
-
+                self.loading_history = True
                 for msg in self.chat_history[user]:
                     self.create_bubble(
                         msg["sender"],
                         msg["content"],
                         True
                     )
-
+                self.loading_history = False
         # ===== PUBLIC CHAT =====
         else:
 
@@ -339,12 +352,13 @@ class ChatApp(ctk.CTk):
 
             # render lịch sử public
             if hasattr(self, "public_history"):
-
+                self.loading_history = True
                 for msg in self.public_history:
                     self.create_bubble(
                         msg["sender"],
                         msg["content"]
                     )
+                self.loading_history = False
         self.after(100, self.scroll_to_bottom)
     # ================= UPDATE USER LIST =================
 
@@ -467,62 +481,6 @@ class ChatApp(ctk.CTk):
                 self.update_user_list(msg["users"])
 
         self.update_job = self.after(100, self.update_messages)
-    # ================== Scroll ===================
-    def scroll_to_bottom(self):
-
-        if not hasattr(self, "chat_area"):
-            return
-
-        canvas = self.chat_area._parent_canvas
-
-        self.update_idletasks()
-        canvas.configure(scrollregion=canvas.bbox("all"))
-        canvas.yview_moveto(1.0)
-
-
-    def smooth_scroll_to_bottom(self):
-
-        if self.is_auto_scrolling:
-            return
-
-        canvas = self.chat_area._parent_canvas
-
-        top, bottom = canvas.yview()
-
-        if bottom < 0.92:
-            return
-
-        self.is_auto_scrolling = True
-
-        start = top
-        end = 1.0
-        steps = 8
-        delta = (end - start) / steps
-
-        def animate(step=0):
-            if step >= steps:
-                canvas.yview_moveto(1.0)
-                self.is_auto_scrolling = False
-                return
-
-            canvas.yview_moveto(start + delta * step)
-            self.after(12, lambda: animate(step + 1))
-
-        animate()
-
-
-    def auto_scroll_if_needed(self):
-        if not hasattr(self, "chat_area"):
-            return
-
-        canvas = self.chat_area._parent_canvas
-        canvas.configure(scrollregion=canvas.bbox("all"))
-
-        top, bottom = canvas.yview()
-
-        if bottom > 0.90:
-            self.smooth_scroll_to_bottom()
-
     # ================= DISCONNECT =================
 
     def disconnect(self):
